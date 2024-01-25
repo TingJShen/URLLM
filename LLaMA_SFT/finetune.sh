@@ -1,0 +1,16 @@
+CUDA_VISIBLE_DEVICES=0,1 python finetune.py \
+    --base_model '/data/models/llama-65b-hf' \
+    --data_path #input_data \
+    --output_dir #output_path \
+    --batch_size 64 \
+    --micro_batch_size 8 \
+    --num_epochs 3 \
+    --learning_rate 1e-4 \
+    --cutoff_len 512 \
+    --val_set_size 2000 \
+    --lora_r 8 \
+    --lora_alpha 16 \
+    --lora_dropout 0.05 \
+    --lora_target_modules '[q_proj,k_proj]' \
+    --train_on_inputs \
+    --group_by_length \
