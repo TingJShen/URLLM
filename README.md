@@ -11,7 +11,6 @@ python ./DG_Final/GM/jsonBuilder_attribute_graph_GPT.py to gain prompts for GPT 
 
 python ./DG_Final/GM/testGPT35 to gain prompts for GPT to build attribute graph
 
-
 run sh ./DG_Final/DG_src/train.sh to gain the similarity of movie-game dataset user in generated ./DG_Final/DG_src/t4_G2_final_DGresult_matmul_trte.npy
 
 python ./DG_Final/GM/jsinBuilder_testing_rc.py to gain prompt for LLaMA2
