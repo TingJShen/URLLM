@@ -1,12 +1,19 @@
 Code inplement of dual-graph sequential model and finetuning LLaMA2 of URLLM
 
 ./DG_Final/GM processed movie-game dataset
+
 ./DG_Final/AO processed art-office dataset
+
 ./DG_Final path of Dual Graph Sequence Modeling Model of URLLM
+
 ./DG_Final/DG_src/dataset/Entertainment-Education_Amazon  user interaction in movie-game dataset
+
 ./DG_Final/DG_src/dataset/Entertainment-Education_AO  user interaction in art-office dataset
+
 ./DG_Final/DG_src/dataset/item_prompt_GM item attribute in movie-game dataset(generated from GPT)
+
 ./DG_Final/DG_src/dataset/item_prompt_AO item attribute in art-official dataset(generated from GPT)
+
 ./llama2-SFT path of finetuning LLaMA2
 
 the following are pipeline of running URLLM on movie-game dataset. The same as art-office dataset.
