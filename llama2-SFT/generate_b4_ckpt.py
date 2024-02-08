@@ -1,14 +1,12 @@
 import os
 import sys
 import json
-import fire
-import gradio as gr
+import argparse
 import torch
 import transformers
 from peft import PeftModel
 from transformers import GenerationConfig, LlamaForCausalLM, LlamaTokenizer
 
-from utils.callbacks import Iteratorize, Stream
 from utils.prompter import Prompter
 
 if torch.cuda.is_available():
@@ -24,14 +22,13 @@ except:  # noqa: E722
 
 
 def main(
-    saveI : int = 0,
     load_8bit: bool = False,
     base_model: str = "",
-    save_path : str = "",
     lora_weights: str = "tloen/alpaca-lora-7b",
-    prompt_template: str = "",  # The prompt template to use, will default to alpaca.
-    server_name: str = "0.0.0.0",  # Allows to listen on all interfaces by providing '0.
-    share_gradio: bool = False,
+    prompt_template: str = "",
+    saveI: int =0,
+    from_json: str="",
+    save_path: str=""
 ):
     base_model = base_model or os.environ.get("BASE_MODEL", "")
     assert (
@@ -41,45 +38,38 @@ def main(
     prompter = Prompter(prompt_template)
     tokenizer = LlamaTokenizer.from_pretrained(base_model)
     if device == "cuda":
-        #print("@@cuda")
         model = LlamaForCausalLM.from_pretrained(
             base_model,
             load_in_8bit=load_8bit,
             torch_dtype=torch.float16,
             device_map="auto",
         )
-        
         model = PeftModel.from_pretrained(
             model,
             lora_weights,
             torch_dtype=torch.float16,
         )
-        
     elif device == "mps":
         model = LlamaForCausalLM.from_pretrained(
             base_model,
             device_map={"": device},
             torch_dtype=torch.float16,
         )
-        '''
         model = PeftModel.from_pretrained(
             model,
             lora_weights,
             device_map={"": device},
             torch_dtype=torch.float16,
         )
-        '''
     else:
         model = LlamaForCausalLM.from_pretrained(
             base_model, device_map={"": device}, low_cpu_mem_usage=True
         )
-        '''
         model = PeftModel.from_pretrained(
             model,
             lora_weights,
             device_map={"": device},
         )
-        '''
 
     # unwind broken decapoda-research config
     model.config.pad_token_id = tokenizer.pad_token_id = 0  # unk
@@ -100,8 +90,7 @@ def main(
         top_p=0.75,
         top_k=40,
         num_beams=4,
-        max_new_tokens=20,
-        max_tokens=2048,
+        max_new_tokens=25,
         stream_output=False,
         **kwargs,
     ):
@@ -124,38 +113,6 @@ def main(
             "max_new_tokens": max_new_tokens,
         }
 
-        if stream_output:
-            # Stream the reply 1 token at a time.
-            # This is based on the trick of using 'stopping_criteria' to create an iterator,
-            # from https://github.com/oobabooga/text-generation-webui/blob/ad37f396fc8bcbab90e11ecf17c56c97bfbd4a9c/modules/text_generation.py#L216-L243.
-
-            def generate_with_callback(callback=None, **kwargs):
-                kwargs.setdefault(
-                    "stopping_criteria", transformers.StoppingCriteriaList()
-                )
-                kwargs["stopping_criteria"].append(
-                    Stream(callback_func=callback)
-                )
-                with torch.no_grad():
-                    model.generate(**kwargs)
-
-            def generate_with_streaming(**kwargs):
-                return Iteratorize(
-                    generate_with_callback, kwargs, callback=None
-                )
-
-            with generate_with_streaming(**generate_params) as generator:
-                for output in generator:
-                    # new_tokens = len(output) - len(input_ids[0])
-                    decoded_output = tokenizer.decode(output)
-
-                    if output[-1] in [tokenizer.eos_token_id]:
-                        break
-
-                    yield prompter.get_response(decoded_output)
-            return  # early return for stream_output
-
-        # Without streaming
         with torch.no_grad():
             generation_output = model.generate(
                 input_ids=input_ids,
@@ -166,40 +123,65 @@ def main(
             )
         s = generation_output.sequences[0]
         output = tokenizer.decode(s)
-        yield prompter.get_response(output)
+        return prompter.get_response(output)
+
+    split_idx=4000
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+        
+    begin_idx=(saveI-1)*split_idx
+    if os.path.exists(save_path+'/Answer'+str(saveI)+'.txt'):
+        f=open(save_path+'/Answer'+str(saveI)+'.txt','r',encoding="utf8")
+        data=f.read().split('##@#')
+        begin_idx=(saveI-1)*split_idx+len(data)-1
+    else:
+        begin_idx=(saveI-1)*split_idx
+        f=open(save_path+'/Answer'+str(saveI)+'.txt','w',encoding="utf8")
+        f.write('')
+        f.close()
+
     instructions=[]
     inputs=[]
-    f=open('#test_json','r') #test_json
+    f=open(str(from_json),'r')
     data_f=json.load(f)
     for line in data_f:
-        instructions.append("Please answer this question.")
+        instructions.append(line['instruction'])
         inputs.append(line['input'])
     f.close()
 
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-    # testing code for readme
-    f=open(save_path+'/Answer'+str(saveI)+'.txt','r',encoding="utf8").read()
-    cnt_idx=len(f.split('##@#'))-1
-    '''
-    f=open(save_path+'/Answer'+str(saveI)+'.txt','w',encoding="utf8")
-    f.write('')
-    f.close()
-    '''
-
-    for instruction_idx in range(cnt_idx,saveI*8000,1):
+    for instruction_idx in range(begin_idx,saveI*split_idx,1):
         instruction=instructions[instruction_idx]
         input_each=inputs[instruction_idx]
-        responseL=list(evaluate(instruction="Please answer this question in one or two words.(Example:What is the capital of the province of Manitoba, Canada? Winnipeg)",input=input_each))
+        responseL=list(evaluate(instruction=instruction,input=input_each))
         response=''
         for items in responseL:
             response+=items
-        print(instruction_idx,"Response:", response)
+        print("Response:", response)
         f=open(save_path+'/Answer'+str(saveI)+'.txt','a',encoding="utf8")
         f.write(str(instruction_idx)+"@@"+response+'\n##@#\n')
         f.close()
-    
+
+    '''
+    while True:
+        instruction = input("Input:")
+        if len(instruction.strip()) == 0:
+            break
+        print("Response:", evaluate(instruction))
+    '''
 
 
 if __name__ == "__main__":
-    fire.Fire(main)
+    # parse args
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--base_model', default=None, type=str, required=True)
+    parser.add_argument('--lora_weights', default=None, type=str,
+                        help="If None, perform inference on the base model")
+    parser.add_argument('--load_8bit', action='store_true',
+                        help='only use CPU for inference')
+    parser.add_argument('--saveI', default=None, type=int, required=True)
+    parser.add_argument('--from_json', default=None, type=str,
+                        help="If None, perform inference on the base model")
+    parser.add_argument('--save_path', default=None, type=str,
+                        help="If None, perform inference on the base model")
+    args = parser.parse_args()
+    main(args.load_8bit, args.base_model, args.lora_weights, "",args.saveI,args.from_json,args.save_path)
