@@ -16,13 +16,16 @@ Code inplement of dual-graph sequential model and finetuning LLaMA2 of URLLM
 
 ./llama2-SFT path of finetuning LLaMA2
 
-the following are pipeline of running URLLM on movie-game dataset. The same as art-office dataset.
+the following are pipelines of running URLLM on movie-game dataset. The same as the art-office dataset.
 
 python ./DG_Final/GM/jsonBuilder_attribute_graph_GPT.py to gain prompts for GPT to build attribute graph
 
 python ./DG_Final/GM/testGPT35 to gain prompts for GPT to build attribute graph
 
-run sh ./DG_Final/DG_src/train.sh to gain the similarity of movie-game dataset user to generate ./DG_Final/DG_src/t4_G2_final_DGresult_matmul_trte.npy
+run sh ./DG_Final/DG_src/train.sh to gain the similarity of movie-game dataset user to generate user representations like DGGM_final_test_x_fea.npy.
 
-python ./DG_Final/GM/jsinBuilder_testing_rc.py utilizing similar user to gain prompt for LLaMA2
+python ./DG_Final/GM/Final_train_contrasive_searcher.py to gain user retrieval matrix best_trte_XORY_DG_.npy
+
+python ./DG_Final/GM/jsinBuilder_testing_rc.py utilizing similar users to gain prompt for LLaMA2
+
 finally sh ./llama2-SFT/generate.sh to gain answers from LLM.
